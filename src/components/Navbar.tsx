@@ -9,13 +9,7 @@ interface NavbarProps {
 export function Navbar({ user }: NavbarProps) {
   const { pathname } = useLocation();
 
-  const displayName =
-    user.user_metadata?.full_name ??
-    user.user_metadata?.name ??
-    user.email ??
-    'User';
-
-  const avatar = user.user_metadata?.avatar_url ?? user.user_metadata?.picture;
+  const displayName = user.email ?? 'User';
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -35,9 +29,6 @@ export function Navbar({ user }: NavbarProps) {
       </div>
 
       <div className="navbar-user">
-        {avatar && (
-          <img className="navbar-avatar" src={avatar} alt={displayName} />
-        )}
         <span className="navbar-name">{displayName}</span>
         <button className="btn-ghost" onClick={handleSignOut}>
           Sign out

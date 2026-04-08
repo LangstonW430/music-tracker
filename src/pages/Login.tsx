@@ -1,39 +1,84 @@
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
-export function Login() {
-  const handleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'spotify',
-      options: {
-        // Request read access to saved tracks
-        scopes: 'user-read-email user-library-read',
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+type Mode = 'signin' | 'signup';
 
-    if (error) {
-      console.error('OAuth error:', error.message);
-      alert('Login failed. Please try again.');
+export function Login() {
+  const [mode, setMode] = useState<Mode>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    if (mode === 'signin') {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) setError(error.message);
+      else setMessage('Check your email for a confirmation link.');
     }
+
+    setLoading(false);
   };
 
   return (
     <div className="login-page">
       <div className="login-card">
-        {/* Simple music note logo */}
         <div className="login-logo" aria-hidden="true">♫</div>
-
         <h1 className="login-title">MusicTracker</h1>
-        <p className="login-subtitle">
-          Import your Spotify library, rate your tracks, and keep track of what you love.
-        </p>
+        <p className="login-subtitle">Rate and track the music you love.</p>
 
-        <button className="btn-spotify" onClick={handleLogin}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-          </svg>
-          Continue with Spotify
-        </button>
+        <form onSubmit={handleSubmit} className="login-form">
+          <input
+            className="input"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+          <input
+            className="input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+          />
+
+          {error && <p className="form-error">{error}</p>}
+          {message && <p className="form-success">{message}</p>}
+
+          <button className="btn-primary" type="submit" disabled={loading}>
+            {loading ? '…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
+
+        <p className="login-switch">
+          {mode === 'signin' ? (
+            <>No account?{' '}
+              <button className="btn-link" onClick={() => { setMode('signup'); setError(null); setMessage(null); }}>
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>Already have an account?{' '}
+              <button className="btn-link" onClick={() => { setMode('signin'); setError(null); setMessage(null); }}>
+                Sign in
+              </button>
+            </>
+          )}
+        </p>
       </div>
     </div>
   );
