@@ -38,3 +38,14 @@ export interface NormalisedTrack {
   album: string;
   image_url: string | null;
 }
+
+// A personalised recommendation returned by the get-recommendations edge function
+export interface Recommendation {
+  source_id: string;
+  name: string;
+  artist: string;
+  album: string;
+  image_url: string | null;
+  reason: string;
+  type: 'content' | 'community' | 'trending' | 'new_release';
+}

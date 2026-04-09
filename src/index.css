@@ -551,6 +551,78 @@ a { color: inherit; text-decoration: none; }
 }
 .empty-state strong { color: var(--text); }
 
+/* ─── Recommendations ────────────────────────────────────────────────────── */
+.rec-section {
+  margin-bottom: 2.5rem;
+}
+.rec-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.2rem;
+}
+.rec-section-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+.rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1.1rem;
+}
+.rec-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.rec-card:hover {
+  border-color: var(--border-h);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+.rec-art {
+  aspect-ratio: 1;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.rec-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+.rec-card:hover .rec-art img { transform: scale(1.04); }
+
+.rec-info {
+  padding: 0.7rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+.rec-reason {
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rec-add {
+  margin-top: auto;
+  align-self: flex-start;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.8rem;
+}
+
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .page { padding: 1.25rem 1rem 4rem; }

@@ -7,6 +7,7 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Ratings } from './pages/Ratings';
+import { Recommendations } from './pages/Recommendations';
 
 // ─── Protected route wrapper ──────────────────────────────────────────────────
 
@@ -63,6 +64,14 @@ export default function App() {
           element={
             <Protected session={session}>
               <Ratings session={session!} />
+            </Protected>
+          }
+        />
+        <Route
+          path="/recommendations"
+          element={
+            <Protected session={session}>
+              <Recommendations session={session!} />
             </Protected>
           }
         />
