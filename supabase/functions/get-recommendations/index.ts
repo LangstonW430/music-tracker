@@ -1,13 +1,15 @@
 /**
  * get-recommendations — Supabase Edge Function
  *
- * Three recommendation sources (all non-blocking — each fails gracefully):
- *
+ * Sources (all non-blocking — each fails gracefully):
  *  1. Content-based: user's top-rated artists → their Spotify top tracks
  *  2. Community: tracks rated 4★+ by other users, sorted by popularity
- *  3. Trending fallback: most-added tracks sitewide (always has results)
+ *  3. Trending: most-added tracks sitewide
+ *  4. New release / popular fallback via Spotify search
+ *  5. Last-resort: well-known artist top tracks
  *
- * Required secrets: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SUPABASE_URL, SUPABASE_ANON_KEY
+ * Accepts POST body: { excludeIds?: string[] }
+ * excludeIds: source_ids already shown to the client (used for pagination)
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -81,14 +83,29 @@ serve(async (req) => {
       });
     }
 
+    // Parse pagination params from body
+    let excludeIds: string[] = [];
+    try {
+      if (req.method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        excludeIds = Array.isArray(body?.excludeIds) ? body.excludeIds : [];
+      }
+    } catch { /* ignore parse errors */ }
+
+    const page = Math.floor(excludeIds.length / 24);
+
     const userId = user.id;
     const recs: Recommendation[] = [];
-    const seen = new Set<string>();
+    // seed `seen` with already-shown ids so we never repeat them
+    const seen = new Set<string>(excludeIds);
 
     // ── Parallel DB queries ───────────────────────────────────────────────────
 
     const [libraryResult, ratingsResult, trendingResult, communityResult] = await Promise.all([
-      supabase.from('user_tracks').select('track_id').eq('user_id', userId),
+      supabase
+        .from('user_tracks')
+        .select('track_id, track:tracks(source_id)')
+        .eq('user_id', userId),
       supabase
         .from('ratings')
         .select('rating, track:tracks(source_id, name, artist)')
@@ -111,18 +128,28 @@ serve(async (req) => {
         .limit(200),
     ]);
 
-    const libraryIds = new Set(
-      (libraryResult.data ?? []).map((r: { track_id: string }) => r.track_id)
+    // Build sets of what the user already has — both by UUID and by source_id
+    const libraryRows = libraryResult.data ?? [];
+    const libraryIds = new Set<string>(
+      libraryRows.map((r: { track_id: string }) => r.track_id)
     );
+    // Handle both object and array shapes that Supabase may return for the join
+    const librarySourceIds = new Set<string>();
+    for (const r of libraryRows as Array<{ track: { source_id: string } | { source_id: string }[] | null }>) {
+      if (!r.track) continue;
+      const t = Array.isArray(r.track) ? r.track[0] : r.track;
+      if (t?.source_id) librarySourceIds.add(t.source_id);
+    }
+    // Also exclude already-seen ids from source id set (for Spotify checks)
+    for (const id of excludeIds) librarySourceIds.add(id);
 
     // ── 1. Content-based: artist top tracks ───────────────────────────────────
 
     const topRatings = (ratingsResult.data ?? []) as Array<{
       rating: number;
-      track: { source_id: string; name: string; artist: string };
+      track: { source_id: string; name: string; artist: string } | null;
     }>;
 
-    // Unique artists from top-rated tracks, preserving rating order
     const artistToTrack = new Map<string, string>();
     for (const r of topRatings) {
       if (r.track?.artist && !artistToTrack.has(r.track.artist)) {
@@ -134,15 +161,15 @@ serve(async (req) => {
       try {
         const token = await getSpotifyToken();
 
-        // Search for each artist to get their Spotify ID (parallel)
-        const artists = [...artistToTrack.entries()].slice(0, 4);
+        // Use more artists on later pages
+        const maxArtists = 4 + page * 2;
+        const artists = [...artistToTrack.entries()].slice(0, maxArtists);
         const searchResults = await Promise.allSettled(
           artists.map(([name]) =>
             spotifyGet(`/search?q=${encodeURIComponent(name)}&type=artist&limit=1`, token)
           )
         );
 
-        // Fetch top tracks for each found artist (parallel)
         const artistIds: Array<{ id: string; name: string; seedTrack: string }> = [];
         for (let i = 0; i < searchResults.length; i++) {
           const result = searchResults[i];
@@ -161,9 +188,9 @@ serve(async (req) => {
           const result = topTracksResults[i];
           if (result.status === 'rejected') continue;
           const artist = artistIds[i];
-          for (const t of (result.value.tracks ?? []).slice(0, 5)) {
+          for (const t of (result.value.tracks ?? [])) {
             const sourceId = `spotify:${t.id}`;
-            if (seen.has(sourceId)) continue;
+            if (seen.has(sourceId) || librarySourceIds.has(sourceId)) continue;
             seen.add(sourceId);
             recs.push({
               source_id: sourceId,
@@ -176,22 +203,24 @@ serve(async (req) => {
             });
           }
         }
-      } catch { /* Spotify unavailable — skip content recs, fall through to trending */ }
+      } catch { /* Spotify unavailable — skip content recs */ }
     }
 
     // ── 2. Community: popular among other users ───────────────────────────────
 
     const popularMap = new Map<string, { track: Record<string, unknown>; count: number }>();
     for (const row of (communityResult.data ?? []) as Array<{
-      track_id: string; track: Record<string, unknown>;
+      track_id: string; track: Record<string, unknown> | null;
     }>) {
       if (!row.track || libraryIds.has(row.track_id)) continue;
+      const sourceId = row.track.source_id as string;
+      if (seen.has(sourceId)) continue;
       const entry = popularMap.get(row.track_id);
       if (entry) entry.count++;
       else popularMap.set(row.track_id, { track: row.track, count: 1 });
     }
 
-    for (const { track, count } of [...popularMap.values()].sort((a, b) => b.count - a.count).slice(0, 8)) {
+    for (const { track, count } of [...popularMap.values()].sort((a, b) => b.count - a.count).slice(0, 15)) {
       const sourceId = track.source_id as string;
       if (seen.has(sourceId)) continue;
       seen.add(sourceId);
@@ -206,19 +235,21 @@ serve(async (req) => {
       });
     }
 
-    // ── 3. Trending fallback: most-added tracks sitewide ─────────────────────
+    // ── 3. Trending: most-added tracks sitewide ───────────────────────────────
 
     const trendingMap = new Map<string, { track: Record<string, unknown>; count: number }>();
     for (const row of (trendingResult.data ?? []) as Array<{
-      track_id: string; track: Record<string, unknown>;
+      track_id: string; track: Record<string, unknown> | null;
     }>) {
       if (!row.track || libraryIds.has(row.track_id)) continue;
+      const sourceId = row.track.source_id as string;
+      if (seen.has(sourceId)) continue;
       const entry = trendingMap.get(row.track_id);
       if (entry) entry.count++;
       else trendingMap.set(row.track_id, { track: row.track, count: 1 });
     }
 
-    for (const { track, count } of [...trendingMap.values()].sort((a, b) => b.count - a.count).slice(0, 10)) {
+    for (const { track, count } of [...trendingMap.values()].sort((a, b) => b.count - a.count).slice(0, 15)) {
       const sourceId = track.source_id as string;
       if (seen.has(sourceId)) continue;
       seen.add(sourceId);
@@ -233,41 +264,45 @@ serve(async (req) => {
       });
     }
 
-    // ── 4. Popular tracks fallback: always available via Spotify search ───────
-    // Uses broad search queries — no user data needed, works on any new site
+    // ── 4. Popular tracks via Spotify search ──────────────────────────────────
 
-    if (recs.length < 8) {
-      const queries = ['year:2024', 'year:2025', 'genre:pop', 'genre:hip-hop'];
-      try {
-        const token = await getSpotifyToken();
-        for (const q of queries) {
-          if (recs.length >= 16) break;
-          try {
-            const data = await spotifyGet(
-              `/search?q=${encodeURIComponent(q)}&type=track&limit=10&market=US`,
-              token
-            );
-            for (const t of (data?.tracks?.items ?? [])) {
-              const sourceId = `spotify:${t.id}`;
-              if (seen.has(sourceId) || libraryIds.has(t.id)) continue;
-              seen.add(sourceId);
-              recs.push({
-                source_id: sourceId,
-                name: t.name,
-                artist: t.artists?.[0]?.name ?? '',
-                album: t.album?.name ?? '',
-                image_url: t.album?.images?.[1]?.url ?? t.album?.images?.[0]?.url ?? null,
-                reason: 'Popular on Spotify',
-                type: 'new_release',
-              });
-            }
-          } catch { /* skip this query */ }
-        }
-      } catch { /* Spotify unavailable — skip popular fallback */ }
-    }
+    const searchQueries = [
+      ['year:2024', 'year:2025', 'genre:pop', 'genre:hip-hop'],
+      ['genre:rock', 'genre:r-n-b', 'genre:electronic', 'genre:indie'],
+      ['genre:rap', 'genre:soul', 'genre:country', 'genre:latin'],
+      ['genre:jazz', 'genre:metal', 'genre:reggae', 'genre:alternative'],
+    ];
+    const pageQueries = searchQueries[page % searchQueries.length];
+    const spotifyOffset = Math.floor(page / searchQueries.length) * 10;
 
-    // ── 5. Last-resort: fetch top tracks for well-known artists ──────────────
-    // If everything else failed (Spotify search restricted, no community data)
+    try {
+      const token = await getSpotifyToken();
+      for (const q of pageQueries) {
+        if (recs.length >= 24) break;
+        try {
+          const data = await spotifyGet(
+            `/search?q=${encodeURIComponent(q)}&type=track&limit=10&offset=${spotifyOffset}&market=US`,
+            token
+          );
+          for (const t of (data?.tracks?.items ?? [])) {
+            const sourceId = `spotify:${t.id}`;
+            if (seen.has(sourceId) || librarySourceIds.has(sourceId)) continue;
+            seen.add(sourceId);
+            recs.push({
+              source_id: sourceId,
+              name: t.name,
+              artist: t.artists?.[0]?.name ?? '',
+              album: t.album?.name ?? '',
+              image_url: t.album?.images?.[1]?.url ?? t.album?.images?.[0]?.url ?? null,
+              reason: 'Popular on Spotify',
+              type: 'new_release',
+            });
+          }
+        } catch { /* skip this query */ }
+      }
+    } catch { /* Spotify unavailable */ }
+
+    // ── 5. Last-resort: well-known artist top tracks ──────────────────────────
 
     if (recs.length === 0) {
       const fallbackArtists = [
@@ -286,7 +321,7 @@ serve(async (req) => {
           if (result.status === 'rejected') continue;
           for (const t of (result.value.tracks ?? []).slice(0, 4)) {
             const sourceId = `spotify:${t.id}`;
-            if (seen.has(sourceId)) continue;
+            if (seen.has(sourceId) || librarySourceIds.has(sourceId)) continue;
             seen.add(sourceId);
             recs.push({
               source_id: sourceId,
@@ -306,6 +341,7 @@ serve(async (req) => {
       JSON.stringify({
         recommendations: recs.slice(0, 24),
         hasRatings: artistToTrack.size > 0,
+        hasMore: recs.length > 0,
       }),
       { headers: { ...cors, 'Content-Type': 'application/json' } }
     );
