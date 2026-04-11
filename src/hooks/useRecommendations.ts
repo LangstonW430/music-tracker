@@ -12,11 +12,14 @@ interface UseRecommendationsResult {
   fetch: () => Promise<void>;
   loadMore: () => Promise<void>;
   removeRecommendation: (sourceId: string) => void;
+  popularRecs: Recommendation[];
+  loadingPopular: boolean;
+  fetchPopular: () => Promise<void>;
 }
 
-async function invokeRecommendations(excludeIds: string[]) {
+async function invokeRecommendations(excludeIds: string[], popular = false) {
   const { data, error: fnError } = await supabase.functions.invoke('get-recommendations', {
-    body: { excludeIds },
+    body: { excludeIds, popular },
   });
   if (fnError) {
     let msg = fnError.message;
@@ -49,6 +52,13 @@ export function useRecommendations(): UseRecommendationsResult {
   const seenIdsRef = useRef<Set<string>>(new Set());
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(false);
+
+  // Popular (generic Spotify) — loaded on demand after personalized content is exhausted
+  const [popularRecs, setPopularRecs] = useState<Recommendation[]>([]);
+  const [loadingPopular, setLoadingPopular] = useState(false);
+  const popularSeenRef = useRef<Set<string>>(new Set());
+  const loadingPopularRef = useRef(false);
+  const hasMorePopularRef = useRef(true);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -99,5 +109,24 @@ export function useRecommendations(): UseRecommendationsResult {
     seenIdsRef.current.delete(sourceId);
   }, []);
 
-  return { recommendations, loading, loadingMore, hasMore, error, hasRatings, fetch, loadMore, removeRecommendation };
+  const fetchPopular = useCallback(async () => {
+    if (loadingPopularRef.current || !hasMorePopularRef.current) return;
+    loadingPopularRef.current = true;
+    setLoadingPopular(true);
+    try {
+      const result = await invokeRecommendations([...popularSeenRef.current], true);
+      if (result.recommendations.length === 0) {
+        hasMorePopularRef.current = false;
+        return;
+      }
+      setPopularRecs((prev) => [...prev, ...result.recommendations]);
+      for (const r of result.recommendations) popularSeenRef.current.add(r.source_id);
+      hasMorePopularRef.current = result.hasMore;
+    } catch { /* non-critical */ } finally {
+      loadingPopularRef.current = false;
+      setLoadingPopular(false);
+    }
+  }, []);
+
+  return { recommendations, loading, loadingMore, hasMore, error, hasRatings, fetch, loadMore, removeRecommendation, popularRecs, loadingPopular, fetchPopular };
 }

@@ -21,13 +21,19 @@ export function Recommendations({ session }: RecommendationsProps) {
     fetch,
     loadMore,
     removeRecommendation,
+    popularRecs,
+    loadingPopular,
+    fetchPopular,
   } = useRecommendations();
 
   const [librarySourceIds, setLibrarySourceIds] = useState<Set<string>>(new Set());
 
-  // Keep a ref to loadMore so the observer closure never goes stale
-  const loadMoreRef = useRef(loadMore);
-  loadMoreRef.current = loadMore;
+  // Sentinel callback: drain personalized content first, then load popular
+  const sentinelCallbackRef = useRef<() => void>(() => {});
+  sentinelCallbackRef.current = () => {
+    if (hasMore) loadMore();
+    else fetchPopular();
+  };
 
   useEffect(() => { fetch(); }, [fetch]);
 
@@ -45,13 +51,13 @@ export function Recommendations({ session }: RecommendationsProps) {
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) loadMoreRef.current();
+        if (entries[0].isIntersecting) sentinelCallbackRef.current();
       },
       { rootMargin: '300px', threshold: 0 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [sentinel]); // only re-runs if the sentinel element itself changes
+  }, [sentinel]);
 
   const handleAdd = useCallback(async (rec: Recommendation) => {
     await addTrackToLibrary(session.user.id, rec);
@@ -59,15 +65,13 @@ export function Recommendations({ session }: RecommendationsProps) {
     setLibrarySourceIds((prev) => new Set([...prev, rec.source_id]));
   }, [session.user.id, removeRecommendation]);
 
-  const contentRecs = recommendations.filter((r) => r.type === 'content');
-  const communityRecs = recommendations.filter((r) => r.type === 'community');
-  const trendingRecs = recommendations.filter((r) => r.type === 'trending');
-  const newReleaseRecs = recommendations.filter((r) => r.type === 'new_release');
+  const forYouRecs = recommendations.filter((r) => r.type === 'content');
+  const communityTrendingRecs = recommendations.filter((r) => r.type !== 'content');
 
   return (
     <div className="page">
       <div className="page-title-row">
-        <h2 className="page-title">Recommended</h2>
+        <h2 className="page-title">Discover</h2>
         <button className="btn-ghost" onClick={fetch} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
@@ -80,53 +84,13 @@ export function Recommendations({ session }: RecommendationsProps) {
       ) : recommendations.length === 0 ? (
         <div className="empty-state">
           <p>No recommendations yet.</p>
-          <p>
-            {hasRatings
-              ? 'Try rating more tracks.'
-              : <>Head to your <strong>Library</strong>, add some tracks and rate them.</>}
-          </p>
+          <p>Head to your <strong>Library</strong> and add some tracks to get started.</p>
         </div>
       ) : (
         <>
-          {contentRecs.length > 0 && (
-            <RecSection title="Picked for you" subtitle="Based on artists you love">
-              {contentRecs.map((rec) => (
-                <RecommendationCard
-                  key={rec.source_id}
-                  rec={rec}
-                  onAdd={handleAdd}
-                  isInLibrary={librarySourceIds.has(rec.source_id)}
-                />
-              ))}
-            </RecSection>
-          )}
-          {communityRecs.length > 0 && (
-            <RecSection title="Popular in the community" subtitle="Highly rated by users with similar taste">
-              {communityRecs.map((rec) => (
-                <RecommendationCard
-                  key={rec.source_id}
-                  rec={rec}
-                  onAdd={handleAdd}
-                  isInLibrary={librarySourceIds.has(rec.source_id)}
-                />
-              ))}
-            </RecSection>
-          )}
-          {trendingRecs.length > 0 && (
-            <RecSection title="Trending" subtitle="Most added tracks on the site">
-              {trendingRecs.map((rec) => (
-                <RecommendationCard
-                  key={rec.source_id}
-                  rec={rec}
-                  onAdd={handleAdd}
-                  isInLibrary={librarySourceIds.has(rec.source_id)}
-                />
-              ))}
-            </RecSection>
-          )}
-          {newReleaseRecs.length > 0 && (
-            <RecSection title="New releases" subtitle="Fresh from Spotify">
-              {newReleaseRecs.map((rec) => (
+          {forYouRecs.length > 0 && (
+            <RecSection title="For You" subtitle="Based on your library and similar artists">
+              {forYouRecs.map((rec) => (
                 <RecommendationCard
                   key={rec.source_id}
                   rec={rec}
@@ -137,12 +101,25 @@ export function Recommendations({ session }: RecommendationsProps) {
             </RecSection>
           )}
 
-          {/* Sentinel div — observer fires loadMore when this scrolls into view */}
+          {[...communityTrendingRecs, ...popularRecs].length > 0 && (
+            <RecSection title="Popular & New" subtitle="Trending tracks and new releases on Spotify">
+              {[...communityTrendingRecs, ...popularRecs].map((rec) => (
+                <RecommendationCard
+                  key={rec.source_id}
+                  rec={rec}
+                  onAdd={handleAdd}
+                  isInLibrary={librarySourceIds.has(rec.source_id)}
+                />
+              ))}
+            </RecSection>
+          )}
+
+          {/* Sentinel — loads more personalized content, then popular once personalized is exhausted */}
           <div ref={setSentinel} style={{ height: '1px' }} />
 
-          {loadingMore && <LoadingSpinner message="Loading more…" />}
+          {(loadingMore || loadingPopular) && <LoadingSpinner message="Loading more…" />}
 
-          {!loadingMore && !hasMore && (
+          {!loadingMore && !loadingPopular && !hasMore && popularRecs.length > 0 && (
             <p className="rec-end-msg">You've seen everything — refresh for new picks.</p>
           )}
         </>
