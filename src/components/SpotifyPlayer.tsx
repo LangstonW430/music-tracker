@@ -17,16 +17,6 @@ export function SpotifyPlayer() {
 
   return (
     <div className="spotify-player">
-      <div className="spotify-player-info">
-        {track.image_url && (
-          <img src={track.image_url} alt="" className="spotify-player-art" />
-        )}
-        <div className="spotify-player-meta">
-          <span className="spotify-player-name">{track.name}</span>
-          <span className="spotify-player-artist">{track.artist}</span>
-        </div>
-      </div>
-
       <iframe
         className="spotify-player-iframe"
         src={embedUrl}
@@ -34,7 +24,6 @@ export function SpotifyPlayer() {
         loading="lazy"
         title={`${track.name} by ${track.artist}`}
       />
-
       <button
         className="spotify-player-close"
         onClick={closePlayer}

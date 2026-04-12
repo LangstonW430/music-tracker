@@ -4,15 +4,21 @@ import type { TrackWithRating } from '../types';
 
 interface TrackCardProps {
   track: TrackWithRating;
-  /** Called with the new rating value (after debounce). */
   onRate: (trackId: string, rating: number) => void;
+  onRemove: (trackId: string) => void;
 }
 
-export function TrackCard({ track, onRate }: TrackCardProps) {
+export function TrackCard({ track, onRate, onRemove }: TrackCardProps) {
   const canPlay = track.source_id.startsWith('spotify:');
 
   return (
-    <article className="track-card">
+    <article className="track-card" role="group">
+      <button
+        className="track-remove"
+        onClick={() => onRemove(track.id)}
+        aria-label={`Remove ${track.name} from library`}
+        type="button"
+      >✕</button>
       <div
         className={`track-art${canPlay ? ' track-art--playable' : ''}`}
         onClick={canPlay ? () => playTrack(track) : undefined}

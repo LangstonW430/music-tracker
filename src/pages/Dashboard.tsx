@@ -17,7 +17,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ session }: DashboardProps) {
-  const { tracks, loading, error, addTrack, updateLocalRating } = useTracks(session);
+  const { tracks, loading, error, addTrack, removeTrack, updateLocalRating } = useTracks(session);
 
   const handleRate = async (trackId: string, rating: number) => {
     updateLocalRating(trackId, rating);
@@ -63,6 +63,7 @@ export function Dashboard({ session }: DashboardProps) {
               key={track.id}
               track={track}
               onRate={handleRate}
+              onRemove={removeTrack}
             />
           ))}
         </div>

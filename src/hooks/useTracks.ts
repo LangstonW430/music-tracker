@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { getUserTracks, addTrackToLibrary } from '../services/tracks';
+import { getUserTracks, addTrackToLibrary, removeTrackFromLibrary } from '../services/tracks';
 import type { TrackWithRating, NormalisedTrack } from '../types';
 
 interface UseTracksResult {
@@ -17,6 +17,7 @@ interface UseTracksResult {
   loading: boolean;
   error: string | null;
   addTrack: (track: NormalisedTrack) => Promise<void>;
+  removeTrack: (trackId: string) => Promise<void>;
   updateLocalRating: (trackId: string, rating: number) => void;
 }
 
@@ -61,11 +62,20 @@ export function useTracks(session: Session | null): UseTracksResult {
     [userId]
   );
 
+  const removeTrack = useCallback(
+    async (trackId: string) => {
+      if (!userId) return;
+      setTracks((prev) => prev.filter((t) => t.id !== trackId));
+      await removeTrackFromLibrary(userId, trackId);
+    },
+    [userId]
+  );
+
   const updateLocalRating = useCallback((trackId: string, rating: number) => {
     setTracks((prev) =>
       prev.map((t) => (t.id === trackId ? { ...t, rating } : t))
     );
   }, []);
 
-  return { tracks, loading, error, addTrack, updateLocalRating };
+  return { tracks, loading, error, addTrack, removeTrack, updateLocalRating };
 }

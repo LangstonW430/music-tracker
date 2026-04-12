@@ -47,6 +47,18 @@ export async function addTrackToLibrary(
   if (utError) throw new Error(`Failed to add track to library: ${utError.message}`);
 }
 
+// ─── Remove a track from the user's library ───────────────────────────────────
+
+export async function removeTrackFromLibrary(userId: string, trackId: string): Promise<void> {
+  const { error } = await supabase
+    .from('user_tracks')
+    .delete()
+    .eq('user_id', userId)
+    .eq('track_id', trackId);
+
+  if (error) throw new Error(`Failed to remove track: ${error.message}`);
+}
+
 // ─── Library queries ──────────────────────────────────────────────────────────
 
 /**
