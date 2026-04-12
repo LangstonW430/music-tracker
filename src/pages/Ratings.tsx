@@ -11,6 +11,7 @@ import { useRatings } from '../hooks/useRatings';
 import { upsertRating } from '../services/ratings';
 import { StarRating } from '../components/StarRating';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { playTrack } from '../lib/playerStore';
 import type { Track } from '../types';
 
 interface RatingsProps {
@@ -58,12 +59,20 @@ export function Ratings({ session }: RatingsProps) {
                   <span className="rating-max">/5</span>
                 </div>
 
-                <div className="rating-art">
+                <div
+                  className={`rating-art${t.source_id.startsWith('spotify:') ? ' track-art--playable' : ''}`}
+                  onClick={t.source_id.startsWith('spotify:') ? () => playTrack(t) : undefined}
+                  role={t.source_id.startsWith('spotify:') ? 'button' : undefined}
+                  tabIndex={t.source_id.startsWith('spotify:') ? 0 : undefined}
+                  onKeyDown={t.source_id.startsWith('spotify:') ? (e) => e.key === 'Enter' && playTrack(t) : undefined}
+                  aria-label={t.source_id.startsWith('spotify:') ? `Play ${t.name}` : undefined}
+                >
                   {t.image_url ? (
                     <img src={t.image_url} alt={t.album} loading="lazy" />
                   ) : (
                     <div className="track-art-placeholder" aria-hidden="true">♪</div>
                   )}
+                  {t.source_id.startsWith('spotify:') && <div className="track-art-play">▶</div>}
                 </div>
 
                 <div className="rating-info">

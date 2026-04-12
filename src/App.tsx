@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { Navbar } from './components/Navbar';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { SpotifyPlayer } from './components/SpotifyPlayer';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Ratings } from './pages/Ratings';
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <BrowserRouter>
       {session && <Navbar user={session.user} />}
+      <SpotifyPlayer />
 
       <Routes>
         <Route
