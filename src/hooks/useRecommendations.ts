@@ -60,7 +60,11 @@ export function useRecommendations(): UseRecommendationsResult {
   const loadingPopularRef = useRef(false);
   const hasMorePopularRef = useRef(true);
 
+  const fetchingRef = useRef(false);
+
   const fetch = useCallback(async () => {
+    if (fetchingRef.current) return; // prevent duplicate concurrent calls
+    fetchingRef.current = true;
     setLoading(true);
     setError(null);
     seenIdsRef.current = new Set();
@@ -74,6 +78,7 @@ export function useRecommendations(): UseRecommendationsResult {
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
     }
   }, []);

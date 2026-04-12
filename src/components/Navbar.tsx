@@ -29,6 +29,9 @@ export function Navbar({ user }: NavbarProps) {
         <Link className={pathname === '/recommendations' ? 'nav-link active' : 'nav-link'} to="/recommendations">
           Discover
         </Link>
+        <Link className={pathname === '/profile' ? 'nav-link active' : 'nav-link'} to="/profile">
+          Profile
+        </Link>
       </div>
 
       <div className="navbar-user">

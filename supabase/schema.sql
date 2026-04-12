@@ -37,6 +37,18 @@ CREATE TABLE IF NOT EXISTS public.ratings (
   UNIQUE (user_id, track_id)
 );
 
+-- Shared cache for Spotify API results (artist searches, genre searches).
+-- Written and read only by edge functions via the service role — no user access.
+-- TTL is enforced in application code (6 hours). Rows are upserted on refresh.
+CREATE TABLE IF NOT EXISTS public.spotify_cache (
+  cache_key  TEXT PRIMARY KEY,
+  data       JSONB NOT NULL,
+  cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.spotify_cache ENABLE ROW LEVEL SECURITY;
+-- No RLS policies: only accessible via service role key in edge functions
+
 -- ─── Indexes ──────────────────────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_user_tracks_user_id ON public.user_tracks (user_id);

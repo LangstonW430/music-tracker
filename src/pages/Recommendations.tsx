@@ -17,7 +17,6 @@ export function Recommendations({ session }: RecommendationsProps) {
     loadingMore,
     hasMore,
     error,
-    hasRatings,
     fetch,
     loadMore,
     removeRecommendation,
@@ -118,10 +117,6 @@ export function Recommendations({ session }: RecommendationsProps) {
           <div ref={setSentinel} style={{ height: '1px' }} />
 
           {(loadingMore || loadingPopular) && <LoadingSpinner message="Loading more…" />}
-
-          {!loadingMore && !loadingPopular && !hasMore && popularRecs.length > 0 && (
-            <p className="rec-end-msg">You've seen everything — refresh for new picks.</p>
-          )}
         </>
       )}
     </div>

@@ -8,6 +8,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Ratings } from './pages/Ratings';
 import { Recommendations } from './pages/Recommendations';
+import { Profile } from './pages/Profile';
 
 // ─── Protected route wrapper ──────────────────────────────────────────────────
 
@@ -72,6 +73,15 @@ export default function App() {
           element={
             <Protected session={session}>
               <Recommendations session={session!} />
+            </Protected>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <Protected session={session}>
+              <Profile session={session!} />
             </Protected>
           }
         />
