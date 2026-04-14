@@ -7,29 +7,35 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { perfStart, perfEnd } from '../lib/perf';
 import type { NormalisedTrack } from '../types';
 
 export async function searchTracks(query: string): Promise<NormalisedTrack[]> {
   if (!query.trim()) return [];
 
-  const { data, error } = await supabase.functions.invoke('spotify-search', {
-    body: { query },
-  });
+  const start = perfStart();
+  try {
+    const { data, error } = await supabase.functions.invoke('spotify-search', {
+      body: { query },
+    });
 
-  if (error) {
-    const detail = (error as { context?: Response }).context;
-    if (detail) {
-      try {
-        const body = await detail.json();
-        if (body?.error) throw new Error(body.error);
-      } catch (inner) {
-        if (inner instanceof Error && inner.message !== error.message) throw inner;
+    if (error) {
+      const detail = (error as { context?: Response }).context;
+      if (detail) {
+        try {
+          const body = await detail.json();
+          if (body?.error) throw new Error(body.error);
+        } catch (inner) {
+          if (inner instanceof Error && inner.message !== error.message) throw inner;
+        }
       }
+      throw new Error(error.message);
     }
-    throw new Error(error.message);
+
+    if (data?.error) throw new Error(data.error);
+
+    return (data?.tracks ?? []) as NormalisedTrack[];
+  } finally {
+    perfEnd(`search "${query}"`, start);
   }
-
-  if (data?.error) throw new Error(data.error);
-
-  return (data?.tracks ?? []) as NormalisedTrack[];
 }

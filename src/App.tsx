@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
+import { perfStart, perfEnd } from './lib/perf';
 import { Navbar } from './components/Navbar';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { SpotifyPlayer } from './components/SpotifyPlayer';
@@ -18,10 +19,12 @@ export default function App() {
   const [resolving, setResolving] = useState(true);
 
   useEffect(() => {
+    const start = perfStart();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
         setResolving(false);
+        perfEnd('session-resolve', start);
       }
     );
     return () => subscription.unsubscribe();

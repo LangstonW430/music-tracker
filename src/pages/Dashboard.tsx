@@ -4,12 +4,14 @@
  * Layout: sticky top bar (stats) + search + responsive track grid.
  */
 
+import { useMemo, Profiler } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useTracks } from '../hooks/useTracks';
 import { upsertRating } from '../services/ratings';
 import { TrackCard } from '../components/TrackCard';
 import { TrackSearch } from '../components/TrackSearch';
 import { LoadingSpinner } from '../components/LoadingSpinner';
+import { profilerLog } from '../lib/perf';
 import type { NormalisedTrack } from '../types';
 
 interface DashboardProps {
@@ -30,7 +32,10 @@ export function Dashboard({ session }: DashboardProps) {
 
   const handleAdded = (track: NormalisedTrack) => addTrack(track);
 
-  const ratedCount = tracks.filter((t) => t.rating !== null).length;
+  const ratedCount = useMemo(
+    () => tracks.filter((t) => t.rating !== null).length,
+    [tracks],
+  );
 
   return (
     <div className="page">
@@ -57,16 +62,18 @@ export function Dashboard({ session }: DashboardProps) {
           <p>Search for a song above to add it.</p>
         </div>
       ) : (
-        <div className="track-grid">
-          {tracks.map((track) => (
-            <TrackCard
-              key={track.id}
-              track={track}
-              onRate={handleRate}
-              onRemove={removeTrack}
-            />
-          ))}
-        </div>
+        <Profiler id="track-grid" onRender={profilerLog}>
+          <div className="track-grid">
+            {tracks.map((track) => (
+              <TrackCard
+                key={track.id}
+                track={track}
+                onRate={handleRate}
+                onRemove={removeTrack}
+              />
+            ))}
+          </div>
+        </Profiler>
       )}
     </div>
   );
