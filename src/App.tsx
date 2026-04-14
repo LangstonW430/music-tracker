@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
@@ -10,18 +10,6 @@ import { Dashboard } from './pages/Dashboard';
 import { Ratings } from './pages/Ratings';
 import { Recommendations } from './pages/Recommendations';
 import { Profile } from './pages/Profile';
-
-// ─── Protected route wrapper ──────────────────────────────────────────────────
-
-interface ProtectedProps {
-  session: Session | null;
-  children: ReactNode;
-}
-
-function Protected({ session, children }: ProtectedProps) {
-  if (!session) return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
@@ -56,36 +44,19 @@ export default function App() {
 
         <Route
           path="/dashboard"
-          element={
-            <Protected session={session}>
-              <Dashboard session={session!} />
-            </Protected>
-          }
+          element={!session ? <Navigate to="/" replace /> : <Dashboard session={session} />}
         />
         <Route
           path="/ratings"
-          element={
-            <Protected session={session}>
-              <Ratings session={session!} />
-            </Protected>
-          }
+          element={!session ? <Navigate to="/" replace /> : <Ratings session={session} />}
         />
         <Route
           path="/recommendations"
-          element={
-            <Protected session={session}>
-              <Recommendations session={session!} />
-            </Protected>
-          }
+          element={!session ? <Navigate to="/" replace /> : <Recommendations session={session} />}
         />
-
         <Route
           path="/profile"
-          element={
-            <Protected session={session}>
-              <Profile session={session!} />
-            </Protected>
-          }
+          element={!session ? <Navigate to="/" replace /> : <Profile session={session} />}
         />
 
         <Route path="*" element={<Navigate to="/" replace />} />

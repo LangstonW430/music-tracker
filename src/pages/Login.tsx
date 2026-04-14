@@ -1,7 +1,26 @@
 import { useState } from 'react';
+import type { AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
 type Mode = 'signin' | 'signup';
+
+function isNetworkError(error: AuthError): boolean {
+  return error.status === 0 || error.message.toLowerCase().includes('fetch');
+}
+
+async function withNetworkRetry(
+  fn: () => Promise<{ error: AuthError | null }>,
+  maxRetries = 2,
+): Promise<{ error: AuthError | null }> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await fn();
+    if (!result.error || !isNetworkError(result.error) || attempt === maxRetries) {
+      return result;
+    }
+    await new Promise(res => setTimeout(res, 500 * 2 ** attempt));
+  }
+  return { error: null };
+}
 
 export function Login() {
   const [mode, setMode] = useState<Mode>('signin');
@@ -18,7 +37,9 @@ export function Login() {
     setMessage(null);
 
     if (mode === 'signin') {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await withNetworkRetry(() =>
+        supabase.auth.signInWithPassword({ email, password })
+      );
       if (error) setError(error.message);
     } else {
       const { error } = await supabase.auth.signUp({ email, password });
